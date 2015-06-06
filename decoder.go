@@ -1,5 +1,5 @@
-// Package csv provides functionality for decoding rows of a CSV file into a struct.
-package csv
+// Package csvdecoder provides functionality for decoding rows of a CSV file into a struct.
+package csvdecoder
 
 import (
 	"errors"
@@ -14,6 +14,8 @@ import (
 // ErrUseDefault can be used by custom assign functions for indicating that the unmarshaller should fallback
 // to the default assign function for the given type.
 var ErrUseDefault = errors.New("use default assign function")
+var ErrRetryAfterDecode = errors.New("Retry after successful decode")
+var ErrFieldCountMismatch = errors.New("struct field count didn't match data column count")
 
 // Reader is the interface used by the decoder to read CSV input line by line.
 //
@@ -37,6 +39,7 @@ type Decoder struct {
 	assigners map[reflect.Kind]AssignFn
 	r         Reader
 	line      int
+	lastdata  []string
 }
 
 // NewDecoder returns a new Decoder instance using r as its source
@@ -84,19 +87,34 @@ func (this *Decoder) Decode(dst interface{}) error {
 		return err
 	} else {
 		if err = unmarshall(data, this.Indexes, this.assigners, dst); err != nil && err != io.EOF {
-			return fmt.Errorf("csv: Error on line %d: %v", this.line, err)
+			this.lastdata = data
+			return err
 		}
+		this.lastdata = nil
 		return nil
 	}
+}
+
+// Retry attempts to unmarshall the data that decoding last failed with an error into the given struct
+// This can be used to read records of an alternate format, for example, a trailer summary record
+func (this *Decoder) Retry(dst interface{}) error {
+	if this.lastdata == nil {
+		return ErrRetryAfterDecode
+	}
+	if err := unmarshall(this.lastdata, this.Indexes, this.assigners, dst); err != nil && err != io.EOF {
+		return fmt.Errorf("csvdecoder: (retry) Error on line %d: %v", this.line, err)
+	}
+	this.lastdata = nil
+	return nil
 }
 
 func unmarshall(data []string, indexes map[string]int, assigners map[reflect.Kind]AssignFn, dst interface{}) error {
 	val := reflect.ValueOf(dst)
 	if val.Kind() != reflect.Ptr {
-		return errors.New("csv: dst is not a pointer")
+		return errors.New("csvdecoder: dst is not a pointer")
 	}
 	if val.IsNil() {
-		return errors.New("csv: dst is nil")
+		return errors.New("csvdecoder: dst is nil")
 	}
 	e := val.Elem()
 	n := e.NumField()
@@ -104,7 +122,7 @@ func unmarshall(data []string, indexes map[string]int, assigners map[reflect.Kin
 	// If indexes is not specified, field number i of dst gets assigned to data[i].
 	// If the number of fields in dst and number of rows in data is inequal, we treat it as an error
 	if indexes == nil && n != len(data) {
-		return errors.New("csv: struct field count didn't match data column count")
+		return ErrFieldCountMismatch
 	}
 
 	t := e.Type()
@@ -130,11 +148,11 @@ func unmarshall(data []string, indexes map[string]int, assigners map[reflect.Kin
 					}
 				}
 				if err != nil {
-					return fmt.Errorf("csv: error assigning value to field %s: %v", f.Name, err)
+					return fmt.Errorf("csvdecoder: error assigning value to field %s: %v", f.Name, err)
 				}
 			}
 		} else {
-			return fmt.Errorf("csv: unassignable field type for field %s: %v", f.Name, v.Kind())
+			return fmt.Errorf("csvdecoder: unassignable field type for field %s: %v", f.Name, v.Kind())
 		}
 	}
 	return nil

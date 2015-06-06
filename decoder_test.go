@@ -1,4 +1,4 @@
-package csv
+package csvdecoder
 
 import (
 	"fmt"
@@ -42,14 +42,14 @@ func TestUnmarshall(t *testing.T) {
 			data: nil,
 			dst:  thing{},
 			want: thing{},
-			err:  fmt.Errorf("csv: dst is not a pointer"),
+			err:  fmt.Errorf("csvdecoder: dst is not a pointer"),
 		},
 		{
 			name: "Error if dst is nil",
 			data: nil,
 			dst:  nilDst,
 			want: nilDst,
-			err:  fmt.Errorf("csv: dst is nil"),
+			err:  fmt.Errorf("csvdecoder: dst is nil"),
 		},
 		{
 			name: "error if no indexes and len(struct fields) != len(data)",
@@ -57,7 +57,7 @@ func TestUnmarshall(t *testing.T) {
 			idx:  nil,
 			dst:  &thing{},
 			want: &thing{},
-			err:  fmt.Errorf("csv: struct field count didn't match data column count"),
+			err:  fmt.Errorf("struct field count didn't match data column count"),
 		},
 		{
 			name: "if no indexes, load fields according their index index in the struct",
@@ -97,7 +97,7 @@ func TestUnmarshall(t *testing.T) {
 			},
 			dst:  &thing{},
 			want: &thing{},
-			err:  fmt.Errorf("csv: unassignable field type for field S: string"),
+			err:  fmt.Errorf("csvdecoder: unassignable field type for field S: string"),
 		},
 		{
 			name: "returns assigner error if assigner returns error",
@@ -110,14 +110,14 @@ func TestUnmarshall(t *testing.T) {
 			},
 			dst:  &thing{},
 			want: &thing{},
-			err:  fmt.Errorf("csv: error assigning value to field S: err!"),
+			err:  fmt.Errorf("csvdecoder: error assigning value to field S: err!"),
 		},
 		{
 			name: "error if field type is time and tag doesn't contain format",
 			data: []string{"1988-11-08"},
 			dst:  &timeThing{},
 			want: &timeThing{},
-			err:  fmt.Errorf("csv: error assigning value to field D: missing format info in tag"),
+			err:  fmt.Errorf("csvdecoder: error assigning value to field D: missing format info in tag"),
 		},
 		{
 			name: "parses time according to format in tag",
